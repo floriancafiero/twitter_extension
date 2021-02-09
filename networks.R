@@ -29,7 +29,9 @@ We realize a left outer join, simply using the base R function, to merge politic
 
 quali <-read.csv("~/Downloads/codage_quali_tweetos.csv", sep=";", comment.char="#")
 bddfinale <- merge(sup5_nodes_political, quali, by=c("user_id"), all.x = TRUE)
-bddfinale[!duplicated(bddfinale$user_id), ] #suppression des doublons potentiels
+bddfinale <- bddfinale[-c(38042, 44613,  44656, 45618, 45835,  46433, 46970, 46985, 47538, 47590, 47871, 48530, 49395, 49412,  49830,  50158, 50177,  50396,  50674, 50991, 51183, 51356, 51488, 51935, 52603, 52679, 52916, 53135, 53276,53493),]
+n_occur <- data.frame(table(bddfinale$user_id))
+n_occur[n_occur$Freq > 1,] #on vérifie l'absence de doublons
 ```
 
 ## Création de périodes de temps et de bases de données associées
@@ -38,7 +40,10 @@ bddfinale[!duplicated(bddfinale$user_id), ] #suppression des doublons potentiels
 library("dplyr")
 library("forcats")
 library("questionr")
-sup5_edges$timeperiod <- as.Date(sup5_edges$timeperiod) #on pense à bien mettre la date au format date pour permettre les comparaisons, et on se permet de négliger l'heure
+sup5_edges <- filter(sup5_edges, sup5_edges[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges <- filter(sup5_edges, sup5_edges[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges <- filter(sup5_edges, sup5_edges[,1]%in% bddfinale$user_id & sup5_edges[,2] %in% bddfinale$user_id)
+sup5_edges$timeperiod <- as.Date(sup5_edges$time) #on pense à bien mettre la date au format date pour permettre les comparaisons, et on se permet de négliger l'heure
 sup5_edges$timeperiod = case_when(
     sup5_edges$timeperiod < "2016-06-01" ~ "avant_juin_2016",
     "2016-05-31" < sup5_edges$timeperiod & sup5_edges$timeperiod < "2017-01-01" ~ "2016_SEM2",
@@ -47,32 +52,54 @@ sup5_edges$timeperiod = case_when(
     "2017-12-31" < sup5_edges$timeperiod & sup5_edges$timeperiod < "2018-06-01" ~ "2018_SEM1",
     "2018-05-31" < sup5_edges$timeperiod & sup5_edges$timeperiod < "2019-01-01" ~ "2018_SEM2",
     "2019-01-01" < sup5_edges$timeperiod ~ "apres_janv_2019")
+
 sup5_edges_period1 <- sup5_edges[sup5_edges$timeperiod =="2016_SEM2", ]
 sup5_edges_period2 <- sup5_edges[sup5_edges$timeperiod =="2017_SEM1", ]
 sup5_edges_period3 <- sup5_edges[sup5_edges$timeperiod =="2017_SEM2", ]
 sup5_edges_period4 <- sup5_edges[sup5_edges$timeperiod =="2018_SEM1", ]
 sup5_edges_period5 <- sup5_edges[sup5_edges$timeperiod =="2018_SEM2", ]
+
+exam <- c(sup5_edges[,1], sup5_edges[,2]) %in% bddfinale[,1]
+exam <- as.data.frame(exam)
 ```
+
+
+ 
+
 
 ##Création des réseaux par période
 
 ```{r network_creation}
 library(igraph)
 library(geomnet)
-network_vax <- graph.data.frame(sup5_edges, directed=TRUE)
+network_vax <- graph.data.frame(sup5_edges, directed=TRUE, vertices = bddfinale)
+network_vax_p1 <- graph.data.frame(sup5_edges_period1, directed=TRUE, vertices = bddfinale)
+network_vax_p2 <- graph.data.frame(sup5_edges_period2, directed=TRUE, vertices = bddfinale)
+network_vax_p3 <- graph.data.frame(sup5_edges_period3, directed=TRUE, vertices = bddfinale)
+network_vax_p4 <- graph.data.frame(sup5_edges_period4, directed=TRUE, vertices = bddfinale)
+network_vax_p5 <- graph.data.frame(sup5_edges_period5, directed=TRUE, vertices = bddfinale)
 ```
+
+
+## Détection de communautés
+
+```{r clustering, echo=FALSE}
+library(cluster)
+
+```
+
 
 ## Préparation analyse de réseau réplicable
 
 To make our computations replicable, we set an arbitrary seed.
 
 ```{r replication, echo=FALSE}
+library(cluster)
 library(statnet)
 set.seed(12345)
 statnet::update_statnet()
 ```
 
-## Détection de communautés
 
 
 
