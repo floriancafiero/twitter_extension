@@ -43,6 +43,7 @@ library("questionr")
 sup5_edges <- filter(sup5_edges, sup5_edges[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
 sup5_edges <- filter(sup5_edges, sup5_edges[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
 sup5_edges <- filter(sup5_edges, sup5_edges[,1]%in% bddfinale$user_id & sup5_edges[,2] %in% bddfinale$user_id)
+
 sup5_edges$timeperiod <- as.Date(sup5_edges$time) #on pense à bien mettre la date au format date pour permettre les comparaisons, et on se permet de négliger l'heure
 sup5_edges$timeperiod = case_when(
     sup5_edges$timeperiod < "2016-06-01" ~ "avant_juin_2016",
@@ -52,20 +53,33 @@ sup5_edges$timeperiod = case_when(
     "2017-12-31" < sup5_edges$timeperiod & sup5_edges$timeperiod < "2018-06-01" ~ "2018_SEM1",
     "2018-05-31" < sup5_edges$timeperiod & sup5_edges$timeperiod < "2019-01-01" ~ "2018_SEM2",
     "2019-01-01" < sup5_edges$timeperiod ~ "apres_janv_2019")
-
 sup5_edges_period1 <- sup5_edges[sup5_edges$timeperiod =="2016_SEM2", ]
+sup5_edges_period1 <- filter(sup5_edges_period1, sup5_edges_period1[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period1 <- filter(sup5_edges_period1, sup5_edges_period1[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period1 <- filter(sup5_edges_period1, sup5_edges_period1[,1]%in% bddfinale$user_id & sup5_edges_period1[,2] %in% bddfinale$user_id)
+
+
 sup5_edges_period2 <- sup5_edges[sup5_edges$timeperiod =="2017_SEM1", ]
+sup5_edges_period2 <- filter(sup5_edges_period2, sup5_edges_period2[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period2 <- filter(sup5_edges_period2, sup5_edges_period2[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period2 <- filter(sup5_edges_period2, sup5_edges_period2[,1]%in% bddfinale$user_id & sup5_edges_period2[,2] %in% bddfinale$user_id)
+
 sup5_edges_period3 <- sup5_edges[sup5_edges$timeperiod =="2017_SEM2", ]
+sup5_edges_period3 <- filter(sup5_edges_period3, sup5_edges_period3[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period3 <- filter(sup5_edges_period3, sup5_edges_period3[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period3 <- filter(sup5_edges_period3, sup5_edges_period3[,1]%in% bddfinale$user_id & sup5_edges_period3[,2] %in% bddfinale$user_id)
+
+
 sup5_edges_period4 <- sup5_edges[sup5_edges$timeperiod =="2018_SEM1", ]
+sup5_edges_period4 <- filter(sup5_edges_period4, sup5_edges_period4[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period4 <- filter(sup5_edges_period4, sup5_edges_period4[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period4 <- filter(sup5_edges_period4, sup5_edges_period4[,1]%in% bddfinale$user_id & sup5_edges_period4[,2] %in% bddfinale$user_id)
+
 sup5_edges_period5 <- sup5_edges[sup5_edges$timeperiod =="2018_SEM2", ]
-
-exam <- c(sup5_edges[,1], sup5_edges[,2]) %in% bddfinale[,1]
-exam <- as.data.frame(exam)
+sup5_edges_period5 <- filter(sup5_edges_period5, sup5_edges_period5[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period5 <- filter(sup5_edges_period5, sup5_edges_period5[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
+sup5_edges_period5 <- filter(sup5_edges_period5, sup5_edges_period5[,1]%in% bddfinale$user_id & sup5_edges_period5[,2] %in% bddfinale$user_id)
 ```
-
-
- 
-
 
 ##Création des réseaux par période
 
@@ -80,14 +94,14 @@ network_vax_p4 <- graph.data.frame(sup5_edges_period4, directed=TRUE, vertices =
 network_vax_p5 <- graph.data.frame(sup5_edges_period5, directed=TRUE, vertices = bddfinale)
 ```
 
-
 ## Détection de communautés
 
 ```{r clustering, echo=FALSE}
 library(cluster)
+louvain_p1 <- igraph::cluster_louvain(network_vax_p1) 
+
 
 ```
-
 
 ## Préparation analyse de réseau réplicable
 
@@ -99,9 +113,6 @@ library(statnet)
 set.seed(12345)
 statnet::update_statnet()
 ```
-
-
-
 
 ## STERGM
 
