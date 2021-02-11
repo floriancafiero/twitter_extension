@@ -12,9 +12,9 @@ sup5_nodes <- sup5_nodes[,c(2,1,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,2
 sup5_edges <- sup5_edges[,c(1,4,2,3,5,6,7)] # On se débrouille pour avoir source et target comme première et deuxième colonnes.
 ```
 
-## Fusion avec BDD politique
+## Fusion avec BDD positionnement
 
-We realize a left outer join, simply using the base R function, to merge political positioning indicators and our tweeters base.
+We realize a left outer join, simply using the base R function, to merge positioning indicators and our tweeters base.
 
 ```{r political}
 political <-read.csv("~/Downloads/newest_engaged_account_unique_follower_sets_oordinates 2 3.csv")
