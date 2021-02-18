@@ -1,3 +1,3 @@
 # twitter_extension
 
-This code implements various analyses on a dataset of tweets in French related to vaccine. Project by Paul Guille-Escuret, Jeremy K. Ward and Florian Cafiero.
+This code implements various analyses on a dataset of tweets in French related to vaccine. Project by Florian Cafiero (CNRS), Paul Guille-Escuret (Paris-Sorbonne) and Jeremy K. Ward (INSERM)
