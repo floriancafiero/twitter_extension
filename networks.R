@@ -21,6 +21,7 @@ sup5_nodes <- sup5_nodes[,-1] #supprime la première colonne inutile
 sup5_edges_glob <- sup5_edges_glob[,-1] #supprime la première colonne inutile
 sup5_nodes <- sup5_nodes[,c(2,1,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23,24,25,26,27,28,29,30,31,32)] # On intervertit les deux premières colonnes, pour commencer par l'user_id
 sup5_edges_glob <- sup5_edges_glob[,c(1,4,2,3,5,6,7)] # On se débrouille pour avoir source et target comme première et deuxième colonnes.
+library(plyr)
 library(dplyr)
 sup5_edges <- filter(sup5_edges_glob, sup5_edges_glob[,5]!= "mention") #on filtre pour ne garder que les RT et commenté
 sup5_edges <- filter(sup5_edges, sup5_edges[,5]!= "RT_comment") #on filtre pour ne garder que les RT
@@ -93,7 +94,7 @@ sup5_edges_period5 <- filter(sup5_edges_period5, sup5_edges_period5[,2]!= "NA") 
 sup5_edges_period5 <- filter(sup5_edges_period5, sup5_edges_period5[,1]%in% bddfinale$user_id & sup5_edges_period5[,2] %in% bddfinale$user_id)
 ```
 
-##Création des réseaux par période
+##Création de réseaux par période
 
 ```{r network_creation}
 library(igraph)
@@ -143,10 +144,8 @@ sizes(louvain_undirected)
 On peut choisir de pondérer les liens entre compte par le nombre de RT.
 
 ```{r finding weight}
-library(plyr)
 weight <- ddply(sup5_edges,.(source_id,target_id), nrow)
 weight$V1
-library(dplyr)
 sup5_edges_community <- left_join(sup5_edges_community, weight, by=c("source_id","target_id"))
 ```
 
@@ -162,10 +161,83 @@ network_vax_final_component_w <- igraph::induced_subgraph(network_vax_final_weig
 network_vax_undirected_w <- as.undirected(network_vax_final_component_w, mode = c("collapse"))
 louvain_undirected_w <- cluster_louvain(network_vax_undirected_w, weights= network_vax_undirected_w$V1 )
 sizes(louvain_undirected_w)
+
 ```
 
+On ré-attache les communautés aux noeuds:
 
-## Autres algorithmes de détection de communautés 
+```{r communities to edges}
+network_vax_undirected_w$community <- louvain_undirected_w$membership
+```
+
+## Analyse des communautés
+
+```{r communities analysis}
+communities <- data.frame() 
+for (i in unique(network_vax_undirected_w$community)) 
+  { 
+# create subgraphs for each community subgraph 
+subgraph <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$community == i)) 
+# get size of each subgraph 
+size <- igraph::gorder(subgraph) 
+#sort by size
+if (igraph::gorder(subgraph) > 100){
+# get betweenness centrality 
+btwn <- igraph::betweenness(subgraph) 
+communities <- communities %>% 
+  dplyr::bind_rows(data.frame(
+    community= i, 
+    n_members = size, 
+    most_important = names(which(btwn == max(btwn))) 
+    ) 
+  ) 
+} 
+}
+knitr::kable(
+  communities %>% 
+    dplyr::select(community, n_members, most_important)
+)
+```
+
+On cherche les 5 comptes dont la centralité de degré est la plus élevée, pour chaque communauté importante détectée.
+
+```{r communities analysis}
+top_five <- data.frame() 
+for (i in unique(network_vax_undirected_w$community)) { 
+  # create subgraphs for each community 
+  subgraph <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$community == i)) 
+  # for larger communities 
+  if (igraph::gorder(subgraph) > 175) { 
+    # get degree 
+    degree <- igraph::degree(subgraph) 
+    # get top five degrees 
+    top <- names(head(sort(degree, decreasing = TRUE), 5)) 
+    result <- data.frame(community = i, rank = 1:5, character = top) 
+  } else { 
+    result <- data.frame(community = NULL, rank = NULL, character = NULL) 
+  } 
+  top_five <- top_five %>% 
+    dplyr::bind_rows(result) 
+} 
+knitr::kable(
+top_five %>% 
+  tidyr::pivot_wider(names_from = rank, values_from = character) 
+)
+```
+
+## Analyse temporelle undirected (pour community detection)
+
+On crée des "subgraphs" pour chacune des périodes de six mois définies.  
+
+```{r temporal}
+network_p1 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2016_SEM2")) 
+network_p2 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2017_SEM1"))
+network_p3 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2017_SEM2"))
+network_p4 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2018_SEM1"))
+network_p5 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2018_SEM2"))
+```
+
+## Autres algorithmes de détection de communautés (ne pas exécuter en local)
 
 
 Trop de communautés par défaut, on change d'algorithme, et on fixe le nombre de communautés, soit avec spinglass
@@ -186,26 +258,17 @@ Ou edge betweenness:
 eb <- network_vax_undirected %>% cluster_edge_betweenness() %>% cut_at(no = 3)
 ```
 
-```{r clustering, echo=FALSE}
+```{r infomap, echo=FALSE}
 library(cluster)
 infomap_global <- igraph::cluster_infomap(network_vax_final, nb.trials = 10, modularity = FALSE) 
 ```
 
-
-```{r clustering, echo=FALSE}
-library(igraph)
-library(cluster)
-edge_betweenness_global <- cluster_edge_betweenness(network_vax_noiso, directed=TRUE)
-```
-
-
-
-```{r clustering, echo=FALSE}
+```{r directed clustering, echo=FALSE}
 library(DirectedClustering)
 clustering_global <- ClustF(network_vax_noiso, type = "directed", isolates = "zero", norm=1)
 ```
 
-```{r clustering, echo=FALSE}
+```{r infomap par période, echo=FALSE}
 library(cluster)
 infomap_p1 <- igraph::cluster_infomap(network_vax_p1, nb.trials = 7, modularity = FALSE) 
 infomap_p2 <- igraph::cluster_infomap(network_vax_p2, nb.trials = 7, modularity = FALSE)
