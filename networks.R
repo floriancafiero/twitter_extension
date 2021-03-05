@@ -161,23 +161,62 @@ network_vax_final_component_w <- igraph::induced_subgraph(network_vax_final_weig
 network_vax_undirected_w <- as.undirected(network_vax_final_component_w, mode = c("collapse"))
 louvain_undirected_w <- cluster_louvain(network_vax_undirected_w, weights= network_vax_undirected_w$V1 )
 sizes(louvain_undirected_w)
-
 ```
 
-On ré-attache les communautés aux noeuds:
+On ré-attache les communautés aux noeuds dans le réseau:
 
 ```{r communities to edges}
 network_vax_undirected_w$community <- louvain_undirected_w$membership
+network_vax_final_component_w$community <- louvain_undirected_w$membership
+```
+
+On ré-attache les communautés aux noeuds dans la bdd des noeuds:
+
+```{r communities to edges}
+tmp <- cbind(as.data.frame(louvain_undirected_w$names), as.data.frame(louvain_undirected_w$membership))
+bddfinale$community <- NA
+bddfinale$community <- tmp$`louvain_undirected_w$membership`[match(bddfinale$user_id,tmp$`louvain_undirected_w$names`)]
+```
+
+
+## Analyse des communautés détectées
+
+### Checking
+
+```{r communities checking}
+bddfinale_annote <- filter(bddfinale, bddfinale$PRO_ANTI_OUT!= "NA")
+table_comm_pro_anti <- table (bddfinale_annote$PRO_ANTI_OUT, bddfinale_annote$community)
+table_comm_pro_anti
+```
+On observe certains phénomènes intéressants. Tout d'abord, les classements par communauté semblent majoritairement recouvrir ceux de l'annotation. Quelques exceptions cependant: 13 critiques de la vaccination sont classés dans la communauté 11, celle des pro-science. Il s'agit en fait de "critiques", mais pas d'antivaccins, souvent issus du milieu médical (pharmacritique, docdu16, martin winckler, formindep etc) qui ne critiquent que certains aspects de la politique vaccinale (HPV, grippe notamment).
+
+Une fois certain de la validité de nos communautés, on les renomme.
+
+```{r communities checking}
+bddfinale$community <- recode(bddfinale$community,
+  "11" = "proscience_france",
+  "52" = "mainstream_media",
+  "51" = "far_left_and_protests",
+  "34" = "public_health_france",
+  "40" = "public_health_international",
+  "22"= "conspiracy_and_far_right_france",
+  "27" = "sport",
+  "25" = "random",
+  "46" = "conspiracy_and_far_right_international",
+  "31" = "proscience_international",
+  "23" = "animal_health"
+)
+head(bddfinale)
 ```
 
 ## Analyse des communautés
 
 ```{r communities analysis}
 communities <- data.frame() 
-for (i in unique(network_vax_undirected_w$community)) 
+for (i in unique(network_vax_final_component_w$community)) 
   { 
 # create subgraphs for each community subgraph 
-subgraph <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$community == i)) 
+subgraph <- induced_subgraph(network_vax_final_component_w, v = which(network_vax_final_component_w$community == i)) 
 # get size of each subgraph 
 size <- igraph::gorder(subgraph) 
 #sort by size
@@ -203,13 +242,13 @@ On cherche les 5 comptes dont la centralité de degré est la plus élevée, pou
 
 ```{r communities analysis}
 top_five <- data.frame() 
-for (i in unique(network_vax_undirected_w$community)) { 
+for (i in unique(network_vax_final_component_w$community)) { 
   # create subgraphs for each community 
-  subgraph <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$community == i)) 
+  subgraph <- induced_subgraph(network_vax_final_component_w, v = which(network_vax_final_component_w$community == i)) 
   # for larger communities 
   if (igraph::gorder(subgraph) > 175) { 
     # get degree 
-    degree <- igraph::degree(subgraph) 
+    degree <- igraph::degree(subgraph, mode = c("in")) 
     # get top five degrees 
     top <- names(head(sort(degree, decreasing = TRUE), 5)) 
     result <- data.frame(community = i, rank = 1:5, character = top) 
@@ -225,20 +264,114 @@ top_five %>%
 )
 ```
 
+
+
+### Variation de followers
+
+Première question: quelles sont les variations de followers de chaque communauté, au cours de la période ? On fait une régression, en prenant comme situation de référence la communauté "out", et en ajoutant comme variable l'appartanence à chaque communauté, l'activité (nb de tweets produits), le pourcentage de RT, et le pourcentage de RT via.
+
+On recode pour cela les communautés principales en dummy, et on élimine les NA.
+
+```{r recoding communities as dummies}
+library(fastDummies)
+bddfinale <- dummy_cols(bddfinale, select_columns = 'community')
+bddfinale_comm <- filter(bddfinale, bddfinale$community != "NA")
+```
+
+On réalise notre régression:
+
+```{r followers variation}
+followers_reg <- lm(bddfinale$v_followers_periode ~ bddfinale$community_proscience_france + bddfinale$community_proscience_international+  bddfinale$community_mainstream_media + bddfinale$community_far_left_and_protests + bddfinale$community_public_health_france + bddfinale$community_public_health_international + bddfinale$community_animal_health + bddfinale$community_conspiracy_and_far_right_france +  bddfinale$community_conspiracy_and_far_right_international)
+summary(followers_reg)
+```
+
+On réalise ensuite notre régression en contrôlant par des paramètres d'activité:
+
+```{r followers variation controlled}
+library(jtools)
+library(broom)
+followers_reg_controlled <- lm(bddfinale$v_followers_periode ~ bddfinale$community_proscience_france + bddfinale$community_proscience_international+  bddfinale$community_mainstream_media + bddfinale$community_far_left_and_protests + bddfinale$community_public_health_france + bddfinale$community_public_health_international + bddfinale$community_animal_health + bddfinale$community_conspiracy_and_far_right_france +  bddfinale$community_conspiracy_and_far_right_international+ bddfinale$n_tweets_BDD + bddfinale$active_period + bddfinale$RTpercent + bddfinale$RT_via_percent + bddfinale$taux_tweets_vac + bddfinale$verified + bddfinale$N_mentions + bddfinale$n_followers)
+summary(followers_reg_controlled)
+plot_summs(followers_reg_controlled)
+plot_coefs(followers_reg_controlled)
+export_summs(followers_reg_controlled)
+tidy_followers_reg_controlled <- tidy(followers_reg_controlled)
+write.csv(tidy_followers_reg_controlled, "tidy_followers_reg_controlled.csv")
+```
+
+
 ## Analyse temporelle undirected (pour community detection)
 
 On crée des "subgraphs" pour chacune des périodes de six mois définies.  
 
-```{r temporal}
-network_p1 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2016_SEM2")) 
-network_p2 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2017_SEM1"))
-network_p3 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2017_SEM2"))
-network_p4 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2018_SEM1"))
-network_p5 <- induced_subgraph(network_vax_undirected_w, v = which(network_vax_undirected_w$timeperiod =="2018_SEM2"))
+```{r creating timperiods directed}
+network_p1 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod!="2016_SEM2"))
+network_p2 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod !="2017_SEM1"))
+network_p3 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod != "2017_SEM2"))
+network_p4 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod !="2018_SEM1"))
+network_p5 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod !="2018_SEM2"))
 ```
 
-## Autres algorithmes de détection de communautés (ne pas exécuter en local)
 
+## Analyse de l'écolution des acteurs les plus centraux (indegree)
+
+```{r indegree distribution p1}
+indeg <- degree(network_vax_final_component_w, mode="in")
+indeg.dist.p1 <- degree_distribution(network_vax_final_component_w, cumulative=T, mode="in")
+plot( x=0:max(indeg), y=1-indeg.dist.p1, pch=19, cex=1.2, col="orange",
+xlab="In degree", ylab="Cumulative Frequency")
+```
+
+On cherche qui ont été les acteurs les plus centraux, et leur communauté:
+
+```{r central p1}
+degree_p1 <- igraph::degree(network_p1, mode = c("in")) 
+# get top 10 degrees 
+top_p1 <- names(head(sort(degree_p1, decreasing = TRUE), 15)) 
+top_p1
+```
+
+Puis pour p2
+
+```{r central p2}
+degree_p2 <- igraph::degree(network_p2, mode = c("in")) 
+# get top 10 degrees 
+top_p2 <- names(head(sort(degree_p2, decreasing = TRUE), 15)) 
+top_p2
+```
+
+
+```{r central p5}
+degree_p5 <- igraph::degree(network_p5, mode = c("in")) 
+# get top 10 degrees 
+top_p5 <- names(head(sort(degree_p5, decreasing = TRUE), 15)) 
+top_p5
+```
+
+
+Qui ont été les acteurs les plus actifs pendant ces période:
+
+```{r active p1-p2}
+
+```
+
+
+
+
+## Analyse période pendant extension
+
+On travaille ici sur le réseau network_p3.
+
+```{r temporal}
+network_p1 <- induced_subgraph(network_vax_undirected_w, e = which(network_vax_undirected_w$timeperiod =="2016_SEM2")) 
+network_p2 <- induced_subgraph(network_vax_undirected_w, e = which(network_vax_undirected_w$timeperiod =="2017_SEM1"))
+```
+
+## Analyse période après l'extension
+
+
+
+## Autres algorithmes de détection de communautés (ne pas exécuter en local)
 
 Trop de communautés par défaut, on change d'algorithme, et on fixe le nombre de communautés, soit avec spinglass
 
@@ -291,3 +424,6 @@ statnet::update_statnet()
 ## STERGM
 
 We use Separable Temporal Exponential family Random Graph Models (STERGM) to model the creation and destruction of links across the period. Two equations for each process are estimated.
+
+
+
