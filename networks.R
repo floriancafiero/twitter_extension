@@ -41,10 +41,11 @@ sup5_nodes_political <- merge(sup5_nodes, political, by=c("user_id"), all.x = TR
 We realize a left outer join, simply using the base R function, to merge political positioning indicators and our tweeters base.
 
 ```{r qualit}
-
 quali <-read.csv("~/Downloads/codage_quali_tweetos.csv", sep=";", comment.char="#")
 bddfinale <- merge(sup5_nodes_political, quali, by=c("user_id"), all.x = TRUE)
 bddfinale <- bddfinale[-c(38042, 44613,  44656, 45618, 45835,  46433, 46970, 46985, 47538, 47590, 47871, 48530, 49395, 49412,  49830,  50158, 50177,  50396,  50674, 50991, 51183, 51356, 51488, 51935, 52603, 52679, 52916, 53135, 53276,53493),]
+names(bddfinale)[names(bddfinale) == "user"] <- "label"
+
 n_occur <- data.frame(table(bddfinale$user_id))
 n_occur[n_occur$Freq > 1,] #on vérifie l'absence de doublons
 ```
@@ -94,17 +95,12 @@ sup5_edges_period5 <- filter(sup5_edges_period5, sup5_edges_period5[,2]!= "NA") 
 sup5_edges_period5 <- filter(sup5_edges_period5, sup5_edges_period5[,1]%in% bddfinale$user_id & sup5_edges_period5[,2] %in% bddfinale$user_id)
 ```
 
-##Création de réseaux par période
+##Suprresion des isolats
 
-```{r network_creation}
+```{r deleting isolates}
 library(igraph)
 network_vax <- graph.data.frame(sup5_edges, directed=TRUE, vertices = bddfinale)
 network_vax_noiso <- delete_vertices (network_vax, V(network_vax)[degree(network_vax)==0]) # on enlève les isolats, pour ne pas les prendre en compte dans la détection de communauté etc. 
-network_vax_p1 <- graph.data.frame(sup5_edges_period1, directed=TRUE, vertices = bddfinale)
-network_vax_p2 <- graph.data.frame(sup5_edges_period2, directed=TRUE, vertices = bddfinale)
-network_vax_p3 <- graph.data.frame(sup5_edges_period3, directed=TRUE, vertices = bddfinale)
-network_vax_p4 <- graph.data.frame(sup5_edges_period4, directed=TRUE, vertices = bddfinale)
-network_vax_p5 <- graph.data.frame(sup5_edges_period5, directed=TRUE, vertices = bddfinale)
 ```
 
 ## Détection de communautés - Louvain non pondéré
@@ -161,6 +157,20 @@ network_vax_final_component_w <- igraph::induced_subgraph(network_vax_final_weig
 network_vax_undirected_w <- as.undirected(network_vax_final_component_w, mode = c("collapse"))
 louvain_undirected_w <- cluster_louvain(network_vax_undirected_w, weights= network_vax_undirected_w$V1 )
 sizes(louvain_undirected_w)
+louvain_undirected_w$membership <-recode(louvain_undirected_w$membership,
+  "11" = "proscience_france",
+  "52" = "mainstream_media",
+  "51" = "far_left_and_protests",
+  "34" = "public_health_france",
+  "40" = "public_health_international",
+  "22"= "conspiracy_and_far_right_france",
+  "27" = "sport",
+  "25" = "random",
+  "46" = "conspiracy_and_far_right_international",
+  "31" = "proscience_international",
+  "23" = "animal_health"
+)
+
 ```
 
 On ré-attache les communautés aux noeuds dans le réseau:
@@ -190,25 +200,6 @@ table_comm_pro_anti
 ```
 On observe certains phénomènes intéressants. Tout d'abord, les classements par communauté semblent majoritairement recouvrir ceux de l'annotation. Quelques exceptions cependant: 13 critiques de la vaccination sont classés dans la communauté 11, celle des pro-science. Il s'agit en fait de "critiques", mais pas d'antivaccins, souvent issus du milieu médical (pharmacritique, docdu16, martin winckler, formindep etc) qui ne critiquent que certains aspects de la politique vaccinale (HPV, grippe notamment).
 
-Une fois certain de la validité de nos communautés, on les renomme.
-
-```{r communities checking}
-bddfinale$community <- recode(bddfinale$community,
-  "11" = "proscience_france",
-  "52" = "mainstream_media",
-  "51" = "far_left_and_protests",
-  "34" = "public_health_france",
-  "40" = "public_health_international",
-  "22"= "conspiracy_and_far_right_france",
-  "27" = "sport",
-  "25" = "random",
-  "46" = "conspiracy_and_far_right_international",
-  "31" = "proscience_international",
-  "23" = "animal_health"
-)
-head(bddfinale)
-```
-
 ## Analyse des communautés
 
 ```{r communities analysis}
@@ -222,7 +213,7 @@ size <- igraph::gorder(subgraph)
 #sort by size
 if (igraph::gorder(subgraph) > 100){
 # get betweenness centrality 
-btwn <- igraph::betweenness(subgraph) 
+btwn <- igraph::betweenness(subgraph, directed=TRUE) 
 communities <- communities %>% 
   dplyr::bind_rows(data.frame(
     community= i, 
@@ -250,10 +241,10 @@ for (i in unique(network_vax_final_component_w$community)) {
     # get degree 
     degree <- igraph::degree(subgraph, mode = c("in")) 
     # get top five degrees 
-    top <- names(head(sort(degree, decreasing = TRUE), 5)) 
+    top <- names(head(sort(degree, decreasing = TRUE), 5))
     result <- data.frame(community = i, rank = 1:5, character = top) 
   } else { 
-    result <- data.frame(community = NULL, rank = NULL, character = NULL) 
+    result <- data.frame(community = NULL, rank = NULL, character = NULL, username= NULL) 
   } 
   top_five <- top_five %>% 
     dplyr::bind_rows(result) 
@@ -264,6 +255,68 @@ top_five %>%
 )
 ```
 
+## Hubs et autorités
+
+
+```{r hubs and authorities}
+hs <- hub_score(network_vax_final_component_w, weights=NA)$vector
+as <- authority_score(network_vax_final_component_w, weights=NA)$vector
+```
+
+```{r hubs and authorities p1}
+hs_p1 <- hub_score(network_p1, weights=NA)$vector
+hs_p1_top <- names(head(sort(hs_p1, decreasing = TRUE), 15)) 
+write.csv(hs_p1_top, "hs_p1_top.csv")
+as_p1 <- authority_score(network_p1, weights=NA)$vector
+as_p1_top <- names(head(sort(as_p1, decreasing = TRUE), 15)) 
+write.csv(as_p1_top, "as_p1_top.csv")
+```
+
+```{r hubs and authorities p2}
+hs_p2 <- hub_score(network_p2, weights=NA)$vector
+hs_p2_top <- names(head(sort(hs_p2, decreasing = TRUE), 15)) 
+write.csv(hs_p2_top, "hs_p2_top.csv")
+as_p2 <- authority_score(network_p2, weights=NA)$vector
+as_p2_top <- names(head(sort(as_p2, decreasing = TRUE), 15)) 
+write.csv(as_p2_top, "as_p2_top.csv")
+```
+
+
+```{r hubs and authorities p3}
+hs_p3 <- hub_score(network_p3, weights=NA)$vector
+hs_p3_top <- names(head(sort(hs_p3, decreasing = TRUE), 15)) 
+write.csv(hs_p3_top, "hs_p3_top.csv")
+as_p3 <- authority_score(network_p3, weights=NA)$vector
+as_p3_top <- names(head(sort(as_p3, decreasing = TRUE), 15)) 
+write.csv(as_p3_top, "as_p3_top.csv")
+```
+
+```{r hubs and authorities p4}
+hs_p4 <- hub_score(network_p4, weights=NA)$vector
+hs_p4_top <- names(head(sort(hs_p4, decreasing = TRUE), 15)) 
+write.csv(hs_p4_top, "hs_p4_top.csv")
+as_p4 <- authority_score(network_p4, weights=NA)$vector
+as_p4_top <- names(head(sort(as_p4, decreasing = TRUE), 15)) 
+write.csv(as_p4_top, "as_p4_top.csv")
+```
+
+```{r hubs and authorities p5}
+hs_p5 <- hub_score(network_p5, weights=NA)$vector
+hs_p5_top <- names(head(sort(hs_p5, decreasing = TRUE), 15)) 
+write.csv(hs_p5_top, "hs_p5_top.csv")
+as_p5 <- authority_score(network_p5, weights=NA)$vector
+as_p5_top <- names(head(sort(as_p5, decreasing = TRUE), 15)) 
+write.csv(as_p5_top, "as_p5_top.csv")
+```
+
+## Cliques
+
+Pas très pertinent pour réseau dirigé...
+
+```{r cliques}
+cliques_max <- largest_cliques(network_vax_final_component_w)
+cliques_max
+```
 
 
 ### Variation de followers
@@ -299,8 +352,7 @@ tidy_followers_reg_controlled <- tidy(followers_reg_controlled)
 write.csv(tidy_followers_reg_controlled, "tidy_followers_reg_controlled.csv")
 ```
 
-
-## Analyse temporelle undirected (pour community detection)
+## Réseaux dirigés divisés par période
 
 On crée des "subgraphs" pour chacune des périodes de six mois définies.  
 
@@ -313,7 +365,8 @@ network_p5 <- delete.edges(network_vax_final_component_w, which(E(network_vax_fi
 ```
 
 
-## Analyse de l'écolution des acteurs les plus centraux (indegree)
+## Analyse de l'écolution des acteurs les plus centraux (indegree) dans le graphe
+
 
 ```{r indegree distribution p1}
 indeg <- degree(network_vax_final_component_w, mode="in")
@@ -329,15 +382,34 @@ degree_p1 <- igraph::degree(network_p1, mode = c("in"))
 # get top 10 degrees 
 top_p1 <- names(head(sort(degree_p1, decreasing = TRUE), 15)) 
 top_p1
+write.csv(top_p1, "topcentral_p1.csv")
 ```
 
-Puis pour p2
 
 ```{r central p2}
 degree_p2 <- igraph::degree(network_p2, mode = c("in")) 
 # get top 10 degrees 
 top_p2 <- names(head(sort(degree_p2, decreasing = TRUE), 15)) 
 top_p2
+write.csv(top_p2, "topcentral_p2.csv")
+```
+
+
+```{r central p3}
+degree_p3 <- igraph::degree(network_p3, mode = c("in")) 
+# get top 10 degrees 
+top_p3 <- names(head(sort(degree_p3, decreasing = TRUE), 15)) 
+top_p3
+write.csv(top_p3, "topcentral_p3.csv")
+```
+
+
+```{r central p4}
+degree_p4 <- igraph::degree(network_p4, mode = c("in")) 
+# get top 10 degrees 
+top_p4 <- names(head(sort(degree_p4, decreasing = TRUE), 15)) 
+top_p4
+write.csv(top_p4, "topcentral_p4.csv")
 ```
 
 
@@ -346,28 +418,141 @@ degree_p5 <- igraph::degree(network_p5, mode = c("in"))
 # get top 10 degrees 
 top_p5 <- names(head(sort(degree_p5, decreasing = TRUE), 15)) 
 top_p5
+write.csv(top_p5, "topcentral_p5.csv")
+```
+
+## Modification de la centralité au sein des communautés ?
+
+```{r central comm p1}
+top_central_p1 <- data.frame() 
+for (i in unique(network_p1$community)) { 
+  # create subgraphs for each community 
+  subgraph <- induced_subgraph(network_p1, v = which(network_p1$community == i)) 
+  # for larger communities 
+  if (igraph::gorder(subgraph) > 175) { 
+    # get degree 
+    degree_p1 <- igraph::degree(subgraph, mode = c("in")) 
+    # get top fifteen indegrees 
+    top <- names(head(sort(degree_p1, decreasing = TRUE), 5))
+    result <- data.frame(community = i, rank = 1:5, character = top) 
+  } else { 
+    result <- data.frame(community = NULL, rank = NULL, character = NULL) 
+  } 
+  top_central_p1 <- top_central_p1 %>% 
+    dplyr::bind_rows(result) 
+} 
+knitr::kable(
+top_central_p1 %>% 
+  tidyr::pivot_wider(names_from = rank, values_from = character) 
+)
 ```
 
 
-Qui ont été les acteurs les plus actifs pendant ces période:
+```{r central comm p2}
+top_central_p2 <- data.frame() 
+for (i in unique(network_p2$community)) { 
+  # create subgraphs for each community 
+  subgraph <- induced_subgraph(network_p2, v = which(network_p2$community == i)) 
+  # for larger communities 
+  if (igraph::gorder(subgraph) > 175) { 
+    # get degree 
+    degree_p2 <- igraph::degree(subgraph, mode = c("in")) 
+    # get top fifteen indegrees 
+    top <- names(head(sort(degree_p2, decreasing = TRUE), 5))
+    result <- data.frame(community = i, rank = 1:5, character = top) 
+  } else { 
+    result <- data.frame(community = NULL, rank = NULL, character = NULL) 
+  } 
+  top_central_p2 <- top_central_p2 %>% 
+    dplyr::bind_rows(result) 
+} 
+knitr::kable(
+top_central_p2 %>% 
+  tidyr::pivot_wider(names_from = rank, values_from = character) 
+)
+```
+
+```{r central comm p3}
+top_central_p3 <- data.frame() 
+for (i in unique(network_p3$community)) { 
+  # create subgraphs for each community 
+  subgraph <- induced_subgraph(network_p3, v = which(network_p3$community == i)) 
+  # for larger communities 
+  if (igraph::gorder(subgraph) > 175) { 
+    # get degree 
+    degree_p3 <- igraph::degree(subgraph, mode = c("in")) 
+    # get top fifteen indegrees 
+    top <- names(head(sort(degree_p3, decreasing = TRUE), 5))
+    result <- data.frame(community = i, rank = 1:5, character = top) 
+  } else { 
+    result <- data.frame(community = NULL, rank = NULL, character = NULL) 
+  } 
+  top_central_p3 <- top_central_p3 %>% 
+    dplyr::bind_rows(result) 
+} 
+knitr::kable(
+top_central_p3 %>% 
+  tidyr::pivot_wider(names_from = rank, values_from = character) 
+)
+```
+
+```{r central comm p4}
+top_central_p4 <- data.frame() 
+for (i in unique(network_p4$community)) { 
+  # create subgraphs for each community 
+  subgraph <- induced_subgraph(network_p4, v = which(network_p4$community == i)) 
+  # for larger communities 
+  if (igraph::gorder(subgraph) > 175) { 
+    # get degree 
+    degree_p4 <- igraph::degree(subgraph, mode = c("in")) 
+    # get top fifteen indegrees 
+    top <- names(head(sort(degree_p4, decreasing = TRUE), 5))
+    result <- data.frame(community = i, rank = 1:5, character = top) 
+  } else { 
+    result <- data.frame(community = NULL, rank = NULL, character = NULL) 
+  } 
+  top_central_p4 <- top_central_p4 %>% 
+    dplyr::bind_rows(result) 
+} 
+knitr::kable(
+top_central_p4 %>% 
+  tidyr::pivot_wider(names_from = rank, values_from = character) 
+)
+```
+
+```{r central comm p5}
+top_central_p5 <- data.frame() 
+for (i in unique(network_p5$community)) { 
+  # create subgraphs for each community 
+  subgraph <- induced_subgraph(network_p5, v = which(network_p5$community == i)) 
+  # for larger communities 
+  if (igraph::gorder(subgraph) > 175) { 
+    # get degree 
+    degree_p5 <- igraph::degree(subgraph, mode = c("in")) 
+    # get top fifteen indegrees 
+    top <- names(head(sort(degree_p5, decreasing = TRUE), 5))
+    result <- data.frame(community = i, rank = 1:5, character = top) 
+  } else { 
+    result <- data.frame(community = NULL, rank = NULL, character = NULL) 
+  } 
+  top_central_p5 <- top_central_p5 %>% 
+    dplyr::bind_rows(result) 
+} 
+knitr::kable(
+top_central_p5 %>% 
+  tidyr::pivot_wider(names_from = rank, values_from = character) 
+)
+```
+
+
+## Activité pendant la période
+
+
+Qui ont été les acteurs les plus actifs pendant ces période ?
 
 ```{r active p1-p2}
 
 ```
-
-
-
-
-## Analyse période pendant extension
-
-On travaille ici sur le réseau network_p3.
-
-```{r temporal}
-network_p1 <- induced_subgraph(network_vax_undirected_w, e = which(network_vax_undirected_w$timeperiod =="2016_SEM2")) 
-network_p2 <- induced_subgraph(network_vax_undirected_w, e = which(network_vax_undirected_w$timeperiod =="2017_SEM1"))
-```
-
-## Analyse période après l'extension
 
 
 
