@@ -1,7 +1,7 @@
 ---
 title: "Twitter_extension"
 author: "Florian Cafiero"
-date: "03/01/2021"
+date: "09/03/2021"
 output: html_document
 ---
  
@@ -44,7 +44,7 @@ We realize a left outer join, simply using the base R function, to merge politic
 quali <-read.csv("~/Downloads/codage_quali_tweetos.csv", sep=";", comment.char="#")
 bddfinale <- merge(sup5_nodes_political, quali, by=c("user_id"), all.x = TRUE)
 bddfinale <- bddfinale[-c(38042, 44613,  44656, 45618, 45835,  46433, 46970, 46985, 47538, 47590, 47871, 48530, 49395, 49412,  49830,  50158, 50177,  50396,  50674, 50991, 51183, 51356, 51488, 51935, 52603, 52679, 52916, 53135, 53276,53493),]
-names(bddfinale)[names(bddfinale) == "user"] <- "label"
+names(bddfinale)[names(bddfinale) == "user"] <- "name"
 
 n_occur <- data.frame(table(bddfinale$user_id))
 n_occur[n_occur$Freq > 1,] #on vérifie l'absence de doublons
