@@ -1,12 +1,15 @@
 ---
 title: "Twitter_extension"
 author: "Florian Cafiero"
-date: "02/06/2021"
+date: "03/01/2021"
+output: html_document
 ---
  
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = FALSE)
 ```
+
+
 
 Penser à utiliser:
 as_long_data_frame(graph)
@@ -26,7 +29,7 @@ Différences producteurs de contenu et importants dans la communauté.
 
 On isole ici les comptes Twitter ayant produit 5 tweets ou plus concernant la vaccination.
 
-```{r import}
+```{r import , results="hide", include=FALSE}
 Sys.setlocale("LC_ALL", "fr_FR.UTF-8")
 sup5_nodes <- read.csv("~/Desktop/Twitter/sup10_tweetos.csv", encoding="UTF-8", comment.char="#")
 sup5_edges_glob <- read.csv("~/Desktop/Twitter/sup10_edges.csv", encoding="UTF-8", comment.char="#")
@@ -42,7 +45,7 @@ sup5_edges <- filter(sup5_edges, sup5_edges[,5]!= "RT_comment") #on filtre pour 
 
 ## Importation des propriétés des noeuds période par période 
 
-```{r import nodes by period}
+```{r import nodes by period, results="hide", message=FALSE}
 Sys.setlocale("LC_ALL", "fr_FR.UTF-8")
 sup5_nodes_period1 <- read.csv("sup10_tweetos_periode1.csv", encoding="UTF-8", comment.char="#")
 sup5_nodes_period2 <- read.csv("sup10_tweetos_periode2.csv", encoding="UTF-8", comment.char="#")
@@ -55,7 +58,7 @@ sup5_nodes_period5 <- read.csv("sup10_tweetos_periode5.csv", encoding="UTF-8", c
 
 We realize a left outer join, simply using the base R function, to merge political positioning indicators and our tweeters base.
 
-```{r political}
+```{r political, results="hide", message=FALSE}
 political <-read.csv("~/Downloads/newest_engaged_account_unique_follower_sets_oordinates_2_3.csv")
 sup5_nodes_political <- merge(sup5_nodes, political, by=c("user_id"), all.x = TRUE)
 sup5_nodes_political_period1 <- merge(sup5_nodes_period1, political, by=c("user_id"), all.x = TRUE)
@@ -69,7 +72,7 @@ sup5_nodes_political_period5 <- merge(sup5_nodes_period5, political, by=c("user_
 
 We realize a left outer join, simply using the base R function, to merge political positioning indicators and our tweeters base.
 
-```{r qualit}
+```{r qualit, results="hide", message=FALSE}
 quali <-read.csv("~/Downloads/codage_quali_tweetos.csv", sep=";", comment.char="#")
 bddfinale <- merge(sup5_nodes_political, quali, by=c("user_id"), all.x = TRUE)
 bddfinale <- bddfinale[-c(38042, 44613,  44656, 45618, 45835,  46433, 46970, 46985, 47538, 47590, 47871, 48530, 49395, 49412,  49830,  50158, 50177,  50396,  50674, 50991, 51183, 51356, 51488, 51935, 52603, 52679, 52916, 53135, 53276,53493),]
@@ -104,7 +107,7 @@ n_occur_p5[n_occur_p5$Freq > 1,]
 
 ## Création de périodes de temps et de bases de données associées
 
-```{r period}
+```{r period, message=FALSE}
 library("dplyr")
 sup5_edges <- filter(sup5_edges, sup5_edges[,1]!= "NA") #on filtre les sources des liens dont l'identité n'a pas pu être  correctement crawlée
 sup5_edges <- filter(sup5_edges, sup5_edges[,2]!= "NA") #on filtre les destinations des liens dont l'identité n'a pas pu être  correctement crawlée
@@ -127,7 +130,7 @@ sup5_edges <- filter(sup5_edges, sup5_edges$timeperiod!="NA")
 
 ##Suprresion des isolats
 
-```{r deleting isolates}
+```{r deleting isolates, message=FALSE}
 library(igraph)
 network_vax <- graph.data.frame(sup5_edges, directed=TRUE, vertices = bddfinale)
 network_vax_noiso <- delete_vertices (network_vax, V(network_vax)[degree(network_vax)==0]) # on enlève les isolats, pour ne pas les prendre en compte dans la détection de communauté etc. 
@@ -137,7 +140,7 @@ network_vax_noiso <- delete_vertices (network_vax, V(network_vax)[degree(network
 
 Pour la détection de communautés, on s'assure que l'on travaille avec le minimum d'informations requise. On retire d'abord tous les doublons potentiels:
 
-```{r removing duplicates}
+```{r removing duplicates, message=FALSE}
 library(dplyr)
 sup5_edges_community <- sup5_edges[,-c(6,7,8)]
 sup5_edges_community <- unique(sup5_edges_community)
@@ -147,9 +150,8 @@ network_vax_final <- delete_vertices (network_vax, V(network_vax)[degree(network
 
 On s'intéresse seulement au plus grands composants du réseaux, on élimine les plus petits composants (le second plus grand composant contient 12 noeuds, le 3ème noeuds, le 4ème 6 noeuds etc.).
 
-```{r removing small components}
+```{r removing small components, results="hide", message=FALSE}
 components_final <- components(graph = network_vax_final)
-components_final
 biggest_cluster_id <- which.max(components_final$csize)
 vert_ids <- V(network_vax_final)[components_final$membership == biggest_cluster_id]
 network_vax_final_component <- igraph::induced_subgraph(network_vax_final, vert_ids)
@@ -157,7 +159,7 @@ network_vax_final_component <- igraph::induced_subgraph(network_vax_final, vert_
 
 On peut ensuite lancer la détection de communautés sur le réseau global. On tente d'abord d'aplatir le réseau, sous forme de réseau non dirigé, et d'exécuter un algorithme de Louvain.
 
-```{r undirected approximation and Louvain}
+```{r undirected approximation and Louvain, results="hide", message=FALSE}
 network_vax_undirected <- as.undirected(network_vax_final_component, mode = c("collapse"))
 louvain_undirected <- cluster_louvain(network_vax_undirected)
 sizes(louvain_undirected)
@@ -167,7 +169,7 @@ sizes(louvain_undirected)
 
 On peut choisir de pondérer les liens entre compte par le nombre de RT.
 
-```{r finding weight}
+```{r finding weight, results="hide", message=FALSE}
 weight <- ddply(sup5_edges,.(source_id,target_id), nrow)
 weight$V1
 sup5_edges_community <- left_join(sup5_edges_community, weight, by=c("source_id","target_id"))
@@ -175,7 +177,7 @@ sup5_edges_community <- left_join(sup5_edges_community, weight, by=c("source_id"
 
 On rééxecute alors l'algorithme de Louvain en intégrant au calcul le poids nouvellement créé.
 
-```{r weighted Louvain}
+```{r weighted Louvain, results="hide", message=FALSE}
 network_vax_final_weighted <- graph.data.frame(sup5_edges_community, directed=TRUE, vertices = bddfinale)
 network_vax_final_weighted <- delete_vertices (network_vax, V(network_vax)[degree(network_vax)==0])
 components_final_weighted <- components(graph = network_vax_final_weighted)
@@ -189,14 +191,14 @@ sizes(louvain_undirected_w)
 
 On ré-attache les communautés aux noeuds dans le réseau:
 
-```{r communities to edges weighted Louvain}
+```{r communities to edges weighted Louvain, results="hide", message=FALSE}
 network_vax_undirected_w$community <- louvain_undirected_w$membership
 network_vax_final_component_w$community <- louvain_undirected_w$membership
 ```
 
 On ré-attache les communautés aux noeuds dans la bdd des noeuds:
 
-```{r communities to edges attachment}
+```{r communities to edges attachment, results="hide", message=FALSE}
 tmp <- cbind(as.data.frame(louvain_undirected_w$names), as.data.frame(louvain_undirected_w$membership))
 bddfinale$community <- NA
 bddfinale$community <- tmp$`louvain_undirected_w$membership`[match(bddfinale$name,tmp$`louvain_undirected_w$names`)]
@@ -204,7 +206,7 @@ bddfinale$community <- tmp$`louvain_undirected_w$membership`[match(bddfinale$nam
 
 Et on fait de même pour les tables par période:
 
-```{r communities to edges attachment period by period}
+```{r communities to edges attachment period by period, results="hide", message=FALSE}
 community <- as.data.frame(cbind(bddfinale$community, bddfinale$user_id))
 names(community)[names(community) == "V1"] <- "community"
 names(community)[names(community) == "V2"] <- "user_id"
@@ -226,12 +228,9 @@ names(bddfinale_period5)[names(bddfinale_period5) == "community.y"] <- "communit
 bddfinale_period5$community
 ```
 
-
-
-
 ## Analyse des communautés
 
-```{r communities analysis}
+```{r communities analysis, message=FALSE}
 communities <- data.frame() 
 for (i in unique(network_vax_final_component_w$community)) 
   { 
@@ -260,7 +259,7 @@ knitr::kable(
 
 On cherche les 5 comptes dont la centralité de degré est la plus élevée, pour chaque communauté importante détectée.
 
-```{r degree centrality}
+```{r degree centrality, message=FALSE}
 top_five <- data.frame() 
 for (i in unique(network_vax_final_component_w$community)) { 
   # create subgraphs for each community 
@@ -287,7 +286,7 @@ top_five %>%
 
 On recode les catégories
 
-```{r recoding categories}
+```{r recoding categories, message=FALSE}
 louvain_undirected_w$membership <-recode(louvain_undirected_w$membership,
   "23" = "proscience_med_france",
   "49" = "mainstream_media",
@@ -300,35 +299,261 @@ louvain_undirected_w$membership <-recode(louvain_undirected_w$membership,
   "13" = "random",
   "27" = "media_public_health_canada",
   "21" = "animal_health", 
-  "44"=  "conspiracy_and_far_right_international"
+  "44"=  "conspiracy_and_far_right_international",
+  .default = "other"   
 )
+
+bddfinale$community <- recode(bddfinale$community,
+  "23" = "proscience_med_france",
+  "49" = "mainstream_media",
+  "48" = "conspiracy_and_far_left",
+  "31" = "public_health_france",
+  "38" = "public_health_international",
+  "20"= "conspiracy_and_far_right_france",
+  "13" = "random",
+  "24" = "pro_science_france",
+  "13" = "random",
+  "27" = "media_public_health_canada",
+  "21" = "animal_health", 
+  "44"=  "conspiracy_and_far_right_international",
+  .default = "other"     
+)
+
+bddfinale_period1$community <- recode(bddfinale_period1$community,
+  "23" = "proscience_med_france",
+  "49" = "mainstream_media",
+  "48" = "conspiracy_and_far_left",
+  "31" = "public_health_france",
+  "38" = "public_health_international",
+  "20"= "conspiracy_and_far_right_france",
+  "13" = "random",
+  "24" = "pro_science_france",
+  "13" = "random",
+  "27" = "media_public_health_canada",
+  "21" = "animal_health", 
+  "44"=  "conspiracy_and_far_right_international",
+  .default = "other"     
+)
+
+bddfinale_period2$community <- recode(bddfinale_period2$community,
+  "23" = "proscience_med_france",
+  "49" = "mainstream_media",
+  "48" = "conspiracy_and_far_left",
+  "31" = "public_health_france",
+  "38" = "public_health_international",
+  "20"= "conspiracy_and_far_right_france",
+  "13" = "random",
+  "24" = "pro_science_france",
+  "13" = "random",
+  "27" = "media_public_health_canada",
+  "21" = "animal_health", 
+  "44"=  "conspiracy_and_far_right_international",
+  .default = "other"     
+)
+
+bddfinale_period3$community <- recode(bddfinale_period3$community,
+  "23" = "proscience_med_france",
+  "49" = "mainstream_media",
+  "48" = "conspiracy_and_far_left",
+  "31" = "public_health_france",
+  "38" = "public_health_international",
+  "20"= "conspiracy_and_far_right_france",
+  "13" = "random",
+  "24" = "pro_science_france",
+  "13" = "random",
+  "27" = "media_public_health_canada",
+  "21" = "animal_health", 
+  "44"=  "conspiracy_and_far_right_international",
+  .default = "other"     
+)
+
+bddfinale_period4$community <- recode(bddfinale_period4$community,
+  "23" = "proscience_med_france",
+  "49" = "mainstream_media",
+  "48" = "conspiracy_and_far_left",
+  "31" = "public_health_france",
+  "38" = "public_health_international",
+  "20"= "conspiracy_and_far_right_france",
+  "13" = "random",
+  "24" = "pro_science_france",
+  "13" = "random",
+  "27" = "media_public_health_canada",
+  "21" = "animal_health", 
+  "44"=  "conspiracy_and_far_right_international",
+  .default = "other"     
+)
+
+
+bddfinale_period5$community <- recode(bddfinale_period5$community,
+  "23" = "proscience_med_france",
+  "49" = "mainstream_media",
+  "48" = "conspiracy_and_far_left",
+  "31" = "public_health_france",
+  "38" = "public_health_international",
+  "20"= "conspiracy_and_far_right_france",
+  "13" = "random",
+  "24" = "pro_science_france",
+  "13" = "random",
+  "27" = "media_public_health_canada",
+  "21" = "animal_health", 
+  "44"=  "conspiracy_and_far_right_international",
+  .default = "other"     
+)
+
 ```
 
 On ré-attache les communautés aux noeuds dans le réseau:
 
-```{r attaching communities to edges}
+```{r attaching communities to edges, message=FALSE}
 network_vax_undirected_w$community <- louvain_undirected_w$membership
 network_vax_final_component_w$community <- louvain_undirected_w$membership
 ```
 
 On ré-attache les communautés aux noeuds dans la bdd des noeuds:
 
-```{r cbind communities}
+```{r cbind communities, message=FALSE}
 tmp <- cbind(as.data.frame(louvain_undirected_w$names), as.data.frame(louvain_undirected_w$membership))
 bddfinale$community <- NA
 bddfinale$community <- tmp$`louvain_undirected_w$membership`[match(bddfinale$name,tmp$`louvain_undirected_w$names`)]
 ```
 
+## Analyse des bios
+
+On sépare les bdd par communautés
+
+
+```{r bdd by communities, include=FALSE}
+bddproscience_med_fr <- bddfinale[which(bddfinale$community_proscience_med_france > 0),]
+bddmedia_fr <- bddfinale[which(bddfinale$community_mainstream_media > 0),]
+bdd_far_left <- bddfinale[which(bddfinale$community_conspiracy_and_far_left > 0),]
+bdd_p_health_fr <- bddfinale[which(bddfinale$community_public_health_france> 0),]
+bdd_p_health_canada <- bddfinale[which(bddfinale$community_media_public_health_canada> 0),]
+bdd_far_right_fr <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_france> 0),]
+bdd_far_right_int <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_international> 0),]
+bdd_far_right_int <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_international> 0),]
+bdd_random <- bddfinale[which(bddfinale$community_random> 0),]
+bdd_proscience_fr <- bddfinale[which(bddfinale$community_pro_science_france> 0),]
+bdd_p_health_int <- bddfinale[which(bddfinale$community_public_health_international> 0),]
+bdd_animal <- bddfinale[which(bddfinale$community_animal_health> 0),]
+```
+
+Puis on fusionne dans chaque série de bios entre elles, puis on les exporte en .txt pour traitement extérieur.
+
+```{r bios by community - promed, include=FALSE}
+library(rtweet)        # Used for extracting the tweets
+library(tm)            # Text mining cleaning
+library(stringr)       # Removing characters
+library(qdapRegex)     # Removing URLs 
+library(wordcloud2) 
+bioproscience_med_fr <- paste(bddproscience_med_fr$bio)
+# cleaning the text
+bioproscience_med_fr <- 
+  bioproscience_med_fr %>%
+  str_remove("\\n") %>%                   # remove linebreaks
+  rm_twitter_url() %>%                    # Remove URLS
+  rm_url() %>%
+  str_remove_all("#\\S+") %>%             # Remove any hashtags
+  str_remove_all("@\\S+") %>%             # Remove any @ mentions
+  removeWords(stopwords("french")) %>%   # Remove common words (a, the, it etc.)
+  removeWords(stopwords("english")) %>%
+  removeNumbers() %>%
+  stripWhitespace() %>%
+  removeWords(c("amp"))                   # Final cleanup of other small changes
+write.table(bioproscience_med_fr, file = "bioprosciences_med.txt", sep = "\t",row.names = FALSE)
+
+bioproscience_fr <- paste(bdd_proscience_fr$bio)
+# cleaning the text
+bioproscience_fr <- 
+  bioproscience_fr %>%
+  str_remove("\\n") %>%                   # remove linebreaks
+  rm_twitter_url() %>%                    # Remove URLS
+  rm_url() %>%
+  str_remove_all("#\\S+") %>%             # Remove any hashtags
+  str_remove_all("@\\S+") %>%             # Remove any @ mentions
+  removeWords(stopwords("french")) %>%   # Remove common words (a, the, it etc.)
+  removeWords(stopwords("english")) %>%
+  removeNumbers() %>%
+  stripWhitespace() %>%
+  removeWords(c("amp"))                   # Final cleanup of other small changes
+write.table(bioproscience_fr, file = "bioproscience.txt", sep = "\t",row.names = FALSE)
+
+
+biofarright_fr <- paste(bdd_far_right_fr$bio)
+# cleaning the text
+biofarright_fr  <- 
+  biofarright_fr  %>%
+  str_remove("\\n") %>%                   # remove linebreaks
+  rm_twitter_url() %>%                    # Remove URLS
+  rm_url() %>%
+  str_remove_all("#\\S+") %>%             # Remove any hashtags
+  str_remove_all("@\\S+") %>%             # Remove any @ mentions
+  removeWords(stopwords("french")) %>%   # Remove common words (a, the, it etc.)
+  removeWords(stopwords("english")) %>%
+  removeNumbers() %>%
+  stripWhitespace() %>%
+  removeWords(c("amp"))                   # Final cleanup of other small changes
+write.table(biofarright_fr, file = "biofarright_fr.txt", sep = "\t",row.names = FALSE)
+
+biofarleft <- paste(bdd_far_left$bio)
+# cleaning the text
+biofarleft  <- 
+  biofarleft  %>%
+  str_remove("\\n") %>%                   # remove linebreaks
+  rm_twitter_url() %>%                    # Remove URLS
+  rm_url() %>%
+  str_remove_all("#\\S+") %>%             # Remove any hashtags
+  str_remove_all("@\\S+") %>%             # Remove any @ mentions
+  removeWords(stopwords("french")) %>%   # Remove common words (a, the, it etc.)
+  removeWords(stopwords("english")) %>%
+  removeNumbers() %>%
+  stripWhitespace() %>%
+  removeWords(c("amp"))                   # Final cleanup of other small changes
+write.table(biofarleft, file = "biofarleft_fr.txt", sep = "\t",row.names = FALSE)
+
+
+biomedia_fr <- paste(bddmedia_fr$bio)
+# cleaning the text
+biomedia_fr  <- 
+  biomedia_fr  %>%
+  str_remove("\\n") %>%                   # remove linebreaks
+  rm_twitter_url() %>%                    # Remove URLS
+  rm_url() %>%
+  str_remove_all("#\\S+") %>%             # Remove any hashtags
+  str_remove_all("@\\S+") %>%             # Remove any @ mentions
+  removeWords(stopwords("french")) %>%   # Remove common words (a, the, it etc.)
+  removeWords(stopwords("english")) %>%
+  removeNumbers() %>%
+  stripWhitespace() %>%
+  removeWords(c("amp"))                   # Final cleanup of other small changes
+write.table(biomedia_fr, file = "biomedia_fr.txt", sep = "\t",row.names = FALSE)
+
+
+
+```
+
+
+bdd_p_health_fr <- bddfinale[which(bddfinale$community_public_health_france> 0),]
+bdd_p_health_canada <- bddfinale[which(bddfinale$community_media_public_health_canada> 0),]
+
+bdd_far_right_int <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_international> 0),]
+bdd_far_right_int <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_international> 0),]
+bdd_random <- bddfinale[which(bddfinale$community_random> 0),]
+
+bdd_p_health_int <- bddfinale[which(bddfinale$community_public_health_international> 0),]
+bdd_animal <- bddfinale[which(bddfinale$community_animal_health> 0),]
+
+
 ## Analyse politique
 
-```{r political period}
+```{r political period, message=FALSE}
 boxplot(political$col0, bddfinale_period1$col0, bddfinale_period2$col0, bddfinale_period3$col0, bddfinale_period4$col0, bddfinale_period5$col0, main="attitude to institutions")
+
 boxplot(political$col1, bddfinale_period1$col1, bddfinale_period2$col1, bddfinale_period3$col1, bddfinale_period4$col1, bddfinale_period5$col1, main="left / right ")
 ```
 
-La population qui parle de vaccins sur Twitter semble répartie comme dans la population. Peu d'évolution au cours du temps en apparence. Si on se concentre sur les plus investis:
+La population qui parle de vaccins sur Twitter semble répartie comme dans la population. Peu d'évolution au cours du temps en apparence. Si on se concentre sur les plus investis sur Twitter:
 
-```{r political period active}
+```{r political period active, message=FALSE}
 bddfinale_period1_active <- bddfinale_period1[which(bddfinale_period1$v_tweets_periode > 500),]
 bddfinale_period2_active <- bddfinale_period2[which(bddfinale_period2$v_tweets_periode > 500),]
 bddfinale_period3_active <- bddfinale_period3[which(bddfinale_period3$v_tweets_periode > 500),]
@@ -338,27 +563,42 @@ boxplot(political$col0, bddfinale_period1_active$col0, bddfinale_period2_active$
 boxplot(political$col1, bddfinale_period1_active$col1, bddfinale_period2_active$col1, bddfinale_period3_active$col1, bddfinale_period4_active$col1, bddfinale_period5_active$col1, main="left / right ")
 ```
 
-Le constat demeure si on se restreint aux utilisateurs les plus actifs.
+Si on regarde maintenant qui parle le plus de vaccins:
 
-```{r political period active}
-bddfinale_period1_active <- bddfinale_period1[which(bddfinale_period1$commu > 500),]
-bddfinale_period2_active <- bddfinale_period2[which(bddfinale_period2$v_tweets_periode > 500),]
-bddfinale_period3_active <- bddfinale_period3[which(bddfinale_period3$v_tweets_periode > 500),]
-bddfinale_period4_active <- bddfinale_period4[which(bddfinale_period4$v_tweets_periode > 500),]
-bddfinale_period5_active <- bddfinale_period5[which(bddfinale_period5$v_tweets_periode > 500),]
-boxplot(political$col0, bddfinale_period1_active$col0, bddfinale_period2_active$col0, bddfinale_period3_active$col0, bddfinale_period4_active$col0, bddfinale_period5_active$col0, main="attitude to institutions")
-boxplot( bddfinale_period1_active$col1, bddfinale_period2_active$col1, bddfinale_period3_active$col1, bddfinale_period4_active$col1, bddfinale_period5_active$col1, main="left / right ")
+```{r political period active quantiles, message=FALSE}
+quantile(bddfinale$n_tweets_BDD, probs = seq(.1, .95, by = .05))
+```
+
+Pour être dans les 5% les plus actifs, il faut en moyenne avoir publié ca. 10 messages sur les vaccins par période. 
+
+
+```{r political period active about vaccines, message=FALSE}
+bddfinale_period1_active_vax <- bddfinale_period1[which(bddfinale_period1$n_tweets_BDD > 10),]
+bddfinale_period2_active_vax <- bddfinale_period2[which(bddfinale_period2$n_tweets_BDD > 10),]
+bddfinale_period3_active_vax <- bddfinale_period3[which(bddfinale_period3$n_tweets_BDD > 10),]
+bddfinale_period4_active_vax <- bddfinale_period4[which(bddfinale_period4$n_tweets_BDD > 10),]
+bddfinale_period5_active_vax <- bddfinale_period5[which(bddfinale_period5$n_tweets_BDD > 10),]
+boxplot(political$col0, bddfinale_period1_active_vax$col0, bddfinale_period2_active_vax$col0, bddfinale_period3_active_vax$col0, bddfinale_period4_active_vax$col0, bddfinale_period5_active_vax$col0, main="attitude to institutions")
+boxplot(political$col1, bddfinale_period1_active_vax$col1, bddfinale_period2_active_vax$col1, bddfinale_period3_active_vax$col1, bddfinale_period4_active_vax$col1, bddfinale_period5_active_vax$col1, main="left / right ")
 ```
 
 
+Quelle structure politique par communauté ?
 
+```{r political by community, message=FALSE}
+boxplot(bddfinale$col0 ~ bddfinale$community, xlab = "Community", ylab="Attitude towards institutions",  cex.axis= 0.7,col=terrain.colors(12), names=c("animal", "conspiracy FL", "conspiracy FR", "conspiracy INT", "media", "public health CA", "other", "proscience", "promed", "public health FR", "public health INT", "random"))
+
+boxplot(bddfinale$col1 ~ bddfinale$community, xlab = "Community", ylab="Left / right ", cex.axis= 0.7, col=terrain.colors(12), names=c("animal", "conspiracy FL", "conspiracy FR", "conspiracy INT", "media", "public health CA", "other", "proscience", "promed", "public health FR", "public health INT", "random"))
+```
+
+Quelle politisation des individus les plus centraux ? Période par période ?
 
 
 ## Analyse des communautés détectées
 
 ### Checking
 
-```{r communities checking}
+```{r communities checking, message=FALSE}
 
 bddfinale_annote <- filter(bddfinale, bddfinale$PRO_ANTI_OUT!= "NA")
 table_comm_pro_anti <- table (bddfinale_annote$PRO_ANTI_OUT, bddfinale_annote$community)
@@ -370,7 +610,7 @@ On observe certains phénomènes intéressants. Tout d'abord, les classements pa
 
 On crée des "subgraphs" pour chacune des périodes de six mois définies.  
 
-```{r creating timperiods directed}
+```{r creating timperiods directed, message=FALSE}
 network_p1 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod!="2016_SEM2"))
 network_p2 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod !="2017_SEM1"))
 network_p3 <- delete.edges(network_vax_final_component_w, which(E(network_vax_final_component_w)$timeperiod != "2017_SEM2"))
@@ -380,13 +620,13 @@ network_p5 <- delete.edges(network_vax_final_component_w, which(E(network_vax_fi
 
 ## Hubs et autorités
 
-```{r hubs and authorities}
+```{r hubs and authorities, message=FALSE}
 hs <- hub_score(network_vax_final_component_w, weights=NA)$vector
 as <- authority_score(network_vax_final_component_w, weights=NA)$vector
 ```
 
 
-```{r hubs and authorities p1}
+```{r hubs and authorities p1, message=FALSE}
 hs_p1 <- hub_score(network_p1, weights=NA)$vector
 hs_p1_top <- names(head(sort(hs_p1, decreasing = TRUE), 15)) 
 write.csv(hs_p1_top, "hs_p1_top.csv")
@@ -396,7 +636,7 @@ as_p1_top
 write.csv(as_p1_top, "as_p1_top.csv")
 ```
 
-```{r hubs and authorities p2}
+```{r hubs and authorities p2, message=FALSE}
 hs_p2 <- hub_score(network_p2, weights=NA)$vector
 hs_p2_top <- names(head(sort(hs_p2, decreasing = TRUE), 15)) 
 hs_p2_top
@@ -407,7 +647,7 @@ as_p2_top
 write.csv(as_p2_top, "as_p2_top.csv")
 ```
 
-```{r hubs and authorities p3}
+```{r hubs and authorities p3, message=FALSE}
 hs_p3 <- hub_score(network_p3, weights=NA)$vector
 hs_p3_top <- names(head(sort(hs_p3, decreasing = TRUE), 15))
 hs_p3_top
@@ -418,7 +658,7 @@ as_p3_top
 write.csv(as_p3_top, "as_p3_top.csv")
 ```
 
-```{r hubs and authorities p4}
+```{r hubs and authorities p4, message=FALSE}
 hs_p4 <- hub_score(network_p4, weights=NA)$vector
 hs_p4_top <- names(head(sort(hs_p4, decreasing = TRUE), 15))
 hs_p4_top
@@ -429,7 +669,7 @@ as_p4_top
 write.csv(as_p4_top, "as_p4_top.csv")
 ```
 
-```{r hubs and authorities p5}
+```{r hubs and authorities p5, message=FALSE}
 hs_p5 <- hub_score(network_p5, weights=NA)$vector
 hs_p5_top <- names(head(sort(hs_p5, decreasing = TRUE), 15)) 
 hs_p5_top
@@ -444,61 +684,67 @@ write.csv(as_p5_top, "as_p5_top.csv")
 
 Pas très pertinent pour réseau dirigé...
 
-```{r cliques}
+```{r cliques, message=FALSE}
 cliques_max <- largest_cliques(network_vax_final_component_w)
 cliques_max
 ```
 
+Checker dupont-Aignan ; asselineau
 
 ### Variation de followers
 
-```{r boxplot v_followers}
-library(graphics)
-boxplot(bddfinale$v_followers_periode ~ bddfinale$community, xlab= "Community", ylab="Variation of followers", col=terrain.colors(11), outline=FALSE, xaxt = "n", cex.axis= 0.8)
-legend("topleft",
-   c("animal","far left","far right fr", "far right intl", "media", "public health CA", "proscience fr", "proscience_med fr", "public health fr", "public health int", "random"), fill=terrain.colors(11),  horiz=FALSE, cex=0.47, xpd = TRUE)
-```
 
+```{r boxplot v_followers, message=FALSE}
+boxplot(bddfinale$v_followers_periode ~ bddfinale$community, xlab= "Community", ylab="Variation of followers", col=terrain.colors(12), outline=FALSE,  cex.axis= 0.5, main="Variaton of followers during the whole period")
+```
+Peu de différence de variation de followers. Regarder peut être ceux qui en ont le plus gagné ?
+
+Période par période:
+
+```{r boxplot v_followers by period, message=FALSE}
+boxplot(bddfinale_period1$v_followers_periode ~ bddfinale_period1$community, xlab= "Community", ylab="Variation of followers - period 1", col=terrain.colors(12), outline=FALSE, cex.axis= 0.5, main="Variaton of followers during period 1")
+
+boxplot(bddfinale_period2$v_followers_periode ~ bddfinale_period2$community, xlab= "Community", ylab="Variation of followers - period 2", col=terrain.colors(12), outline=FALSE, cex.axis= 0.5, main="Variaton of followers during period 2")
+
+boxplot(bddfinale_period3$v_followers_periode ~ bddfinale_period3$community, xlab= "Community", ylab="Variation of followers - period 3", col=terrain.colors(12), outline=FALSE, cex.axis= 0.5, main="Variaton of followers during period 3")
+
+boxplot(bddfinale_period4$v_followers_periode ~ bddfinale_period4$community, xlab= "Community", ylab="Variation of followers - period 4", col=terrain.colors(12), outline=FALSE, cex.axis= 0.5, main="Variaton of followers during period 4")
+
+boxplot(bddfinale_period5$v_followers_periode ~ bddfinale_period5$community, xlab= "Community", ylab="Variation of followers - period 5", col=terrain.colors(12), outline=FALSE, cex.axis= 0.5, main="Variaton of followers during period 5")
+```
 
 On fait une régression, en prenant comme situation de référence la communauté "out", et en ajoutant comme variable l'appartanence à chaque communauté, l'activité (nb de tweets produits), le pourcentage de RT, et le pourcentage de RT via.
 
 On recode pour cela les communautés principales en dummy, et on élimine les NA.
 
-```{r recoding communities as dummies}
+```{r recoding communities as dummies, message=FALSE}
 library(fastDummies)
 bddfinale <- dummy_cols(bddfinale, select_columns = 'community')
 bddfinale_comm <- filter(bddfinale, bddfinale$community != "NA")
 ```
 
-```{r boxplot tweet vax}
-library(graphics)
-boxplot(bddfinale$taux_tweets_vac ~ bddfinale$community, xlab= "Community", ylab="Percentage of tweets regarding vaccines", col=terrain.colors(11), outline=FALSE, xaxt = "n", cex.axis= 0.8)
-legend("topleft",
-   c("animal","far left","far right fr", "far right intl", "media", "public health CA", "proscience fr", "proscience_med fr", "public health fr", "public health int", "random"), fill=terrain.colors(11),  horiz=FALSE, cex=0.7, xpd = TRUE)
+```{r boxplot tweet vax, message=FALSE}
+boxplot(bddfinale$taux_tweets_vac ~ bddfinale$community, xlab= "Community", ylab="Percentage of tweets regarding vaccines", col=terrain.colors(12), outline=FALSE,  cex.axis= 0.5)
 ```
 
-```{r boxplot tweet antivax}
-library(graphics)
-boxplot(bddfinale$taux_antivac ~ bddfinale$community, xlab= "Community", ylab="Percentage of tweets regarding anti-vaccine", col=terrain.colors(11), outline=FALSE, xaxt = "n", cex.axis= 0.8)
-legend("topleft",
-   c("animal","far left","far right fr", "far right intl", "media", "public health CA", "proscience fr", "proscience_med fr", "public health fr", "public health int", "random"), fill=terrain.colors(11),  horiz=FALSE, cex=0.47, xpd = TRUE)
+```{r boxplot tweet antivax, message=FALSE}
+boxplot(bddfinale$taux_antivac ~ bddfinale$community, xlab= "Community", ylab="Percentage of tweets regarding anti-vaccine", col=terrain.colors(12), outline=FALSE, cex.axis= 0.5)
 ```
-
 
 On réalise notre régression:
 
-```{r followers variation}
+```{r followers variation, message=FALSE}
 followers_reg <- lm(bddfinale$v_followers_periode ~ bddfinale$community_animal_health + bddfinale$community_public_health_france + bddfinale$community_media_public_health_canada + bddfinale$community_proscience_med_france + bddfinale$community_pro_science_france + bddfinale$community_conspiracy_and_far_right_france + bddfinale$community_conspiracy_and_far_right_international + bddfinale$community_conspiracy_and_far_left + bddfinale$community_mainstream_media + bddfinale$community_random)
 summary(followers_reg)
 ```
 
-```{r followers par tweet vac variation}
+```{r followers par tweet vac variation, message=FALSE}
 followers_reg <- lm(bddfinale$v_followers_periode ~ bddfinale$taux_tweets_vac + bddfinale$n_tweets_BDD)
 summary(followers_reg)
 ```
 
 
-```{r discretisation tweets_antivac}
+```{r discretisation tweets_antivac, message=FALSE}
 library(fastDummies)
 bddfinale$quartile_tx_tweets_vac <- cut(bddfinale$taux_tweets_vac, breaks=quantile(bddfinale$taux_tweets_vac, c(0, 0.25, 0.5, 0.75, 1), na.rm=TRUE), include.lowest = TRUE, labels=c("Q1","Q2","Q3","Q4"))
 bddfinale$quartile_tx_twwets_vac
@@ -507,10 +753,10 @@ bddfinale <- dummy_cols(bddfinale, select_columns = 'quartile_tx_tweets_vac')
 
 On réalise ensuite notre régression en contrôlant par des paramètres d'activité:
 
-```{r followers variation controlled}
+```{r followers variation controlled, message=FALSE}
 library(jtools)
 library(broom)
-followers_reg_controlled <- lm(bddfinale$v_followers_periode ~ bddfinale$community_animal_health + bddfinale$community_public_health_france + bddfinale$community_media_public_health_canada + bddfinale$community_proscience_med_france + + bddfinale$community_pro_science_france +  bddfinale$community_conspiracy_and_far_right_france + bddfinale$community_conspiracy_and_far_right_international + bddfinale$community_conspiracy_and_far_left + bddfinale$taux_majuscules + bddfinale$taux_antivac + bddfinale$community_mainstream_media +  bddfinale$n_tweets_BDD + bddfinale$active_period + bddfinale$RTpercent + bddfinale$RT_via_percent + bddfinale$taux_tweets_vac + bddfinale$verified + bddfinale$N_mentions + bddfinale$n_followers)
+followers_reg_controlled <- lm(bddfinale$v_followers_periode ~ bddfinale$community_other + bddfinale$community_animal_health + bddfinale$community_public_health_france + bddfinale$community_media_public_health_canada + bddfinale$community_proscience_med_france + + bddfinale$community_pro_science_france +  bddfinale$community_conspiracy_and_far_right_france + bddfinale$community_conspiracy_and_far_right_international + bddfinale$community_conspiracy_and_far_left + bddfinale$taux_majuscules + bddfinale$taux_antivac + bddfinale$community_mainstream_media +  bddfinale$n_tweets_BDD + bddfinale$active_period + bddfinale$RTpercent + bddfinale$RT_via_percent + bddfinale$taux_tweets_vac + bddfinale$verified + bddfinale$N_mentions + bddfinale$n_followers)
 summary(followers_reg_controlled)
 plot_summs(followers_reg_controlled)
 plot_coefs(followers_reg_controlled)
@@ -519,10 +765,10 @@ tidy_followers_reg_controlled <- tidy(followers_reg_controlled)
 write.csv(tidy_followers_reg_controlled, "tidy_followers_reg_controlled.csv")
 ```
 
-```{r followers variation controlled other version}
+```{r followers variation controlled other version, message=FALSE}
 library(jtools)
 library(broom)
-followers_reg_controlled <- lm(bddfinale$v_followers_periode ~ bddfinale$community_animal_health + bddfinale$community_public_health_france + bddfinale$community_media_public_health_canada + bddfinale$community_proscience_med_france + bddfinale$community_pro_science_france +  bddfinale$community_conspiracy_and_far_right_france + bddfinale$community_conspiracy_and_far_right_international + bddfinale$community_conspiracy_and_far_left + bddfinale$taux_majuscules + bddfinale$taux_antivac + bddfinale$community_mainstream_media +  bddfinale$n_tweets_BDD + bddfinale$active_period + bddfinale$RTpercent + bddfinale$RT_via_percent + bddfinale$taux_tweets_vac + bddfinale$verified + bddfinale$N_mentions + bddfinale$n_followers)
+followers_reg_controlled <- lm(bddfinale$v_followers_periode ~ bddfinale$community_other + bddfinale$community_animal_health + bddfinale$community_public_health_france + bddfinale$community_media_public_health_canada + bddfinale$community_proscience_med_france + bddfinale$community_pro_science_france +  bddfinale$community_conspiracy_and_far_right_france + bddfinale$community_conspiracy_and_far_right_international + bddfinale$community_conspiracy_and_far_left + bddfinale$taux_majuscules + bddfinale$taux_antivac + bddfinale$community_mainstream_media +  bddfinale$n_tweets_BDD + bddfinale$active_period + bddfinale$RTpercent + bddfinale$RT_via_percent + bddfinale$taux_tweets_vac + bddfinale$verified + bddfinale$N_mentions + bddfinale$n_followers)
 summary(followers_reg_controlled)
 plot_summs(followers_reg_controlled)
 plot_coefs(followers_reg_controlled)
@@ -532,10 +778,10 @@ write.csv(tidy_followers_reg_controlled, "tidy_followers_reg_controlled.csv")
 ```
 
 
-## Analyse de l'écolution des acteurs les plus centraux (indegree) dans le graphe
+## Analyse de l'évolution des acteurs les plus centraux (indegree) dans le graphe
 
 
-```{r indegree distribution p1}
+```{r indegree distribution p1, message=FALSE}
 indeg <- degree(network_vax_final_component_w, mode="in")
 indeg.dist.p1 <- degree_distribution(network_vax_final_component_w, cumulative=T, mode="in")
 plot_degree_distribution <- plot( x=0:max(indeg), y=1-indeg.dist.p1, pch=19, cex=1.2, col="orange",
@@ -544,7 +790,7 @@ xlab="In degree", ylab="Cumulative Frequency")
 
 On cherche qui ont été les acteurs les plus centraux, et leur communauté:
 
-```{r central p1}
+```{r central p1, message=FALSE}
 degree_p1 <- igraph::degree(network_p1, mode = c("in")) 
 # get top 10 degrees 
 top_p1 <- names(head(sort(degree_p1, decreasing = TRUE), 15)) 
@@ -553,7 +799,7 @@ write.csv(top_p1, "topcentral_p1.csv")
 ```
 
 
-```{r central p2}
+```{r central p2, message=FALSE}
 degree_p2 <- igraph::degree(network_p2, mode = c("in")) 
 # get top 10 degrees 
 top_p2 <- names(head(sort(degree_p2, decreasing = TRUE), 15)) 
@@ -562,7 +808,7 @@ write.csv(top_p2, "topcentral_p2.csv")
 ```
 
 
-```{r central p3}
+```{r central p3, message=FALSE}
 degree_p3 <- igraph::degree(network_p3, mode = c("in")) 
 # get top 10 degrees 
 top_p3 <- names(head(sort(degree_p3, decreasing = TRUE), 15)) 
@@ -571,7 +817,7 @@ write.csv(top_p3, "topcentral_p3.csv")
 ```
 
 
-```{r central p4}
+```{r central p4, message=FALSE}
 degree_p4 <- igraph::degree(network_p4, mode = c("in")) 
 # get top 10 degrees 
 top_p4 <- names(head(sort(degree_p4, decreasing = TRUE), 15)) 
@@ -580,7 +826,7 @@ write.csv(top_p4, "topcentral_p4.csv")
 ```
 
 
-```{r central p5}
+```{r central p5, message=FALSE}
 degree_p5 <- igraph::degree(network_p5, mode = c("in")) 
 # get top 10 degrees 
 
@@ -593,14 +839,22 @@ write.csv(top_p5, "topcentral_p5.csv")
 
 Période 1
 
-```{r degré par communauté}
+```{r degré par communauté, message=FALSE}
 centcomp1 <- as.data.frame(degree_p1, network_p1$community)
 centcomp1$commmunity_p1 <- network_p1$community
 colnames(centcomp1) <- c("value", "variable")
 centcomp1 <- filter(centcomp1, centcomp1$variable!= "NA")
 ```
 
-```{r central p1}
+```{r central p1 par comm, message=FALSE}
+library(ggplot2)
+library(tidyverse)
+library(hrbrthemes)
+library(plotly)
+library(babynames)
+library(viridis)
+library(ggthemes)
+library(reshape)
 box_central_p1 <- ggplot(centcomp1, aes(x = variable, y = value, color = variable, fill=variable)) + geom_boxplot(alpha=0.7) +  stat_summary(fun= mean, geom="point", shape=20, size=3, color="red", fill="red") + ggtitle("2016 - 2nd semester") + coord_flip() + theme_economist() +scale_fill_viridis(discrete=TRUE) + scale_color_viridis(discrete=TRUE)+ xlab("") + scale_y_log10() +
     ylab("Indegree centrality")
 box_central_p1 <- box_central_p1 + theme(legend.position = "none")
@@ -609,14 +863,14 @@ box_central_p1
 
 Période 2
 
-```{r degré par communauté p2}
+```{r degré par communauté p2, message=FALSE}
 centcomp2 <- as.data.frame(degree_p2, network_p2$community)
 centcomp2$commmunity_p2 <- network_p2$community
 colnames(centcomp2) <- c("value", "variable")
 centcomp2 <- filter(centcomp2, centcomp2$variable!= "NA")
 ```
 
-```{r central p2}
+```{r central p2 par comm, message=FALSE}
 box_central_p2 <- ggplot(centcomp2, aes(x = variable, y = value, color = variable, fill=variable)) + geom_boxplot(alpha=0.7) +  stat_summary(fun= mean, geom="point", shape=20, size=3, color="red", fill="red") + ggtitle("2017 - 1st semester") + coord_flip() + theme_economist() +scale_fill_viridis(discrete=TRUE) + scale_color_viridis(discrete=TRUE)+ xlab("") + scale_y_log10() +
     ylab("Indegree centrality")
 box_central_p2 <- box_central_p2 + theme(legend.position = "none")
@@ -625,14 +879,14 @@ box_central_p2
 
 Période 3
 
-```{r degré par communauté p3}
+```{r degré par communauté p3, message=FALSE}
 centcomp3 <- as.data.frame(degree_p3, network_p3$community)
 centcomp3$commmunity_p3 <- network_p3$community
 colnames(centcomp3) <- c("value", "variable")
 centcomp3 <- filter(centcomp3, centcomp3$variable!= "NA")
 ```
 
-```{r central p3}
+```{r central p3 par comm, message=FALSE}
 box_central_p3 <- ggplot(centcomp3, aes(x = variable, y = value, color = variable, fill=variable)) + geom_boxplot(alpha=0.7) +  stat_summary(fun= mean, geom="point", shape=20, size=3, color="red", fill="red") + ggtitle("2017 - 2nd semester") + coord_flip() + theme_economist() +scale_fill_viridis(discrete=TRUE) + scale_color_viridis(discrete=TRUE)+ xlab("") + scale_y_log10() +
     ylab("Indegree centrality")
 box_central_p3 <- box_central_p3 + theme(legend.position = "none")
@@ -640,7 +894,7 @@ box_central_p3
 ```
 Période 4
 
-```{r degré par communauté p4}
+```{r degré par communauté p4, message=FALSE}
 centcomp4 <- as.data.frame(degree_p4, network_p4$community)
 centcomp4$commmunity_p4 <- network_p4$community
 colnames(centcomp4) <- c("value", "variable")
@@ -648,7 +902,7 @@ centcomp4 <- filter(centcomp4, centcomp4$variable!= "NA")
 ```
 
 
-```{r central p4}
+```{r central p4 par comm, message=FALSE}
 box_central_p4 <- ggplot(centcomp4, aes(x = variable, y = value, color = variable, fill=variable)) + geom_boxplot(alpha=0.7) +  stat_summary(fun= mean, geom="point", shape=20, size=3, color="red", fill="red") + ggtitle("2018 - 1st semester") + coord_flip() + theme_economist() +scale_fill_viridis(discrete=TRUE) + scale_color_viridis(discrete=TRUE)+ xlab("") + scale_y_log10() +
     ylab("Indegree centrality")
 box_central_p4 <- box_central_p4 + theme(legend.position = "none")
@@ -657,14 +911,14 @@ box_central_p4
 
 Période 5
 
-```{r degré par communauté p5}
+```{r degré par communauté p5, message=FALSE}
 centcomp5 <- as.data.frame(degree_p5, network_p5$community)
 centcomp5$commmunity_p5 <- network_p5$community
 colnames(centcomp5) <- c("value", "variable")
 centcomp5 <- filter(centcomp5, centcomp5$variable!= "NA")
 ```
 
-```{r central p5}
+```{r central p5 par comm, message=FALSE}
 box_central_p5 <- ggplot(centcomp5, aes(x = variable, y = value, color = variable, fill=variable)) + ggtitle("")+ geom_boxplot(alpha=0.7) +  stat_summary(fun= mean, geom="point", shape=20, size=3, color="red", fill="red") + ggtitle("2018 - 2nd semester") + coord_flip() + theme_economist() +scale_fill_viridis(discrete=TRUE) + scale_color_viridis(discrete=TRUE)+ xlab("") + scale_y_log10() +
     ylab("Indegree centrality")
 box_central_p5 <- box_central_p5 + theme(legend.position = "none")
@@ -674,7 +928,7 @@ box_central_p5
 
 ## Modification de la centralité au sein des communautés ?
 
-```{r central comm p1}
+```{r central comm p1, message=FALSE}
 top_central_p1 <- data.frame() 
 for (i in unique(network_p1$community)) { 
   # create subgraphs for each community 
@@ -699,7 +953,7 @@ top_central_p1 %>%
 ```
 
 
-```{r central comm p2}
+```{r central comm p2, message=FALSE}
 top_central_p2 <- data.frame() 
 for (i in unique(network_p2$community)) { 
   # create subgraphs for each community 
@@ -723,7 +977,7 @@ top_central_p2 %>%
 )
 ```
 
-```{r central comm p3}
+```{r central comm p3, message=FALSE}
 top_central_p3 <- data.frame() 
 for (i in unique(network_p3$community)) { 
   # create subgraphs for each community 
@@ -747,7 +1001,7 @@ top_central_p3 %>%
 )
 ```
 
-```{r central comm p4}
+```{r central comm p4, message=FALSE}
 top_central_p4 <- data.frame() 
 for (i in unique(network_p4$community)) { 
   # create subgraphs for each community 
@@ -771,7 +1025,7 @@ top_central_p4 %>%
 )
 ```
 
-```{r central comm p5}
+```{r central comm p5, message=FALSE}
 top_central_p5 <- data.frame() 
 for (i in unique(network_p5$community)) { 
   # create subgraphs for each community 
@@ -795,11 +1049,14 @@ top_central_p5 %>%
 )
 ```
 
+
+(Vérifier mobilisation par hashtags par pétition)
+
 ## Spécialisation des acteurs
 
 On calcule le taux de tweets parlant de la vaccination à chaque période.
 
-```{r specialisation}
+```{r specialisation, message=FALSE}
 specialisation_p1 <- sup5_nodes_period1$taux_tweets_vac
 specialisation_p2 <- sup5_nodes_period2$taux_tweets_vac
 specialisation_p3 <- sup5_nodes_period3$taux_tweets_vac
@@ -837,17 +1094,17 @@ boxplot(specialisation_ap1, specialisation_ap2, specialisation_ap3, specialisati
 
 Quelle variation d'activité pendant la période ?
 
-```{r active p1}
+```{r active p1, message=FALSE}
 boxplot(sup5_nodes_period1$v_tweets_periode, sup5_nodes_period2$v_tweets_periode, sup5_nodes_period3$v_tweets_periode, sup5_nodes_period4$v_tweets_periode, sup5_nodes_period5$v_tweets_periode, col="#69b3a2", boxwex=0.4, outline = FALSE)
 ```
 
-```{r active p1}
-boxplot(sup5_nodes_period1$n_tweets_BDD, sup5_nodes_period2$n_tweets_BDD, sup5_nodes_period3$n_tweets_BDD, sup5_nodes_period4$n_tweets_BDD, sup5_nodes_period5$n_tweets_BDD, col="#69b3a2", boxwex=0.4, outline = FALSE, main="Number of tweets regarding per user during each period")
+```{r active p1 without outliers, message=FALSE}
+boxplot(sup5_nodes_period1$n_tweets_BDD, sup5_nodes_period2$n_tweets_BDD, sup5_nodes_period3$n_tweets_BDD, sup5_nodes_period4$n_tweets_BDD, sup5_nodes_period5$n_tweets_BDD, col="#69b3a2", boxwex=0.4, outline = FALSE, main="Number of tweets regarding vaccines per user during each period")
 ```
 
 Quelle variation du nombre de maladies citées dans les tweets sur les vaccins ?
 
-```{r nb diseases cited}
+```{r nb diseases cited, message=FALSE}
 sup5_nodes_period1_maladies <-sup5_nodes_period1[which(sup5_nodes_period1$N_maladies_cites > 0),]
 sup5_nodes_period2_maladies <-sup5_nodes_period2[which(sup5_nodes_period1$N_maladies_cites > 0),]
 sup5_nodes_period3_maladies <-sup5_nodes_period3[which(sup5_nodes_period1$N_maladies_cites > 0),]
@@ -859,7 +1116,7 @@ boxplot(sup5_nodes_period1_maladies$N_maladies_cites, sup5_nodes_period2_maladie
 
 Quelle variation du nombre de vaccins citées dans les tweets sur les vaccins ?
 
-```{r nb vaccines cited}
+```{r nb vaccines cited, message=FALSE}
 sup5_nodes_period1_vaccins <-sup5_nodes_period1[which(sup5_nodes_period1$N_vaccins_cites > 0),]
 sup5_nodes_period2_vaccins <-sup5_nodes_period2[which(sup5_nodes_period1$N_vaccins_cites > 0),]
 sup5_nodes_period3_vaccins <-sup5_nodes_period3[which(sup5_nodes_period1$N_vaccins_cites > 0),]
@@ -872,7 +1129,6 @@ sizedata3 <- nrow(sup5_nodes_period3_vaccins)
 sizedata4 <- nrow(sup5_nodes_period4_vaccins)
 sizedata5 <- nrow(sup5_nodes_period5_vaccins)
 
-
 boxplot(sup5_nodes_period1_vaccins$N_vaccins_cites, sup5_nodes_period2_vaccins$N_vaccins_cites, sup5_nodes_period3_vaccins$N_vaccins_cites, sup5_nodes_period4_vaccins$N_vaccins_cites, sup5_nodes_period5_vaccins$N_vaccins_cites, main="number of vaccines cited in tweets about vaccines by a same user", col="#69b3a2", boxwex=0.4, width= c(sizedata1,sizedata2,sizedata3, sizedata4, sizedata5))
 ```
 
@@ -880,66 +1136,13 @@ boxplot(sup5_nodes_period1_vaccins$N_vaccins_cites, sup5_nodes_period2_vaccins$N
 ## Restrictions aux militants
 
 
-```{r militants}
+```{r militants, results="hide", message=FALSE}
 network_p1_m <- delete.vertices(network_p1, which(V(network_p1)$PRO_ANTI_OUT!=c("PRO", "ANTI","OUT")))
 V(network_p1_m)$PRO_ANTI_OUT
 V(network_p1)$PRO_ANTI_OUT
 ```
 
-
-## Autres algorithmes de détection de communautés (ne pas exécuter en local)
-
-Trop de communautés par défaut, on change d'algorithme, et on fixe le nombre de communautés, soit avec spinglass
-
-```{r spinglass}
-spinglass_undirected <- network_vax_undirected %>% cluster_spinglass(spins = 3)
-```
-
-Soit avec walktrap (marche sur CPU ISC):
-
-```{r walktrap}
-walk <- network_vax_undirected %>% cluster_walktrap() %>% cut_at(no = 3) 
-```
-
-Ou edge betweenness:
-
-```{r edge betweenness}
-eb <- network_vax_undirected %>% cluster_edge_betweenness() %>% cut_at(no = 3)
-```
-
-```{r infomap, echo=FALSE}
-library(cluster)
-infomap_global <- igraph::cluster_infomap(network_vax_final, nb.trials = 10, modularity = FALSE) 
-```
-
-```{r directed clustering, echo=FALSE}
-library(DirectedClustering)
-clustering_global <- ClustF(network_vax_noiso, type = "directed", isolates = "zero", norm=1)
-```
-
-```{r infomap par période, echo=FALSE}
-library(cluster)
-infomap_p1 <- igraph::cluster_infomap(network_vax_p1, nb.trials = 7, modularity = FALSE) 
-infomap_p2 <- igraph::cluster_infomap(network_vax_p2, nb.trials = 7, modularity = FALSE)
-infomap_p3 <- igraph::cluster_infomap(network_vax_p3, nb.trials = 7, modularity = FALSE)
-infomap_p4 <- igraph::cluster_infomap(network_vax_p4, nb.trials = 7, modularity = FALSE)
-infomap_p5 <- igraph::cluster_infomap(network_vax_p5, nb.trials = 7, modularity = FALSE)
-```
-
-## Préparation analyse de réseau réplicable
-
-To make our computations replicable, we set an arbitrary seed.
-
-```{r replication, echo=FALSE}
-library(cluster)
-library(statnet)
-set.seed(12345)
-statnet::update_statnet()
-```
-
 ## STERGM
 
 We use Separable Temporal Exponential family Random Graph Models (STERGM) to model the creation and destruction of links across the period. Two equations for each process are estimated.
-
-
 
