@@ -423,18 +423,17 @@ On sépare les bdd par communautés
 
 
 ```{r bdd by communities, include=FALSE}
-bddproscience_med_fr <- bddfinale[which(bddfinale$community_proscience_med_france > 0),]
-bddmedia_fr <- bddfinale[which(bddfinale$community_mainstream_media > 0),]
-bdd_far_left <- bddfinale[which(bddfinale$community_conspiracy_and_far_left > 0),]
-bdd_p_health_fr <- bddfinale[which(bddfinale$community_public_health_france> 0),]
-bdd_p_health_canada <- bddfinale[which(bddfinale$community_media_public_health_canada> 0),]
-bdd_far_right_fr <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_france> 0),]
-bdd_far_right_int <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_international> 0),]
-bdd_far_right_int <- bddfinale[which(bddfinale$community_conspiracy_and_far_right_international> 0),]
-bdd_random <- bddfinale[which(bddfinale$community_random> 0),]
-bdd_proscience_fr <- bddfinale[which(bddfinale$community_pro_science_france> 0),]
-bdd_p_health_int <- bddfinale[which(bddfinale$community_public_health_international> 0),]
-bdd_animal <- bddfinale[which(bddfinale$community_animal_health> 0),]
+bddproscience_med_fr <- bddfinale[which(bddfinale$community == "proscience_med_france" ),]
+bddmedia_fr <- bddfinale[which(bddfinale$community == "mainstream_media" ),]
+bdd_far_left <- bddfinale[which(bddfinale$community == "conspiracy_and_far_left"),]
+bdd_p_health_fr <- bddfinale[which(bddfinale$community == "public_health_france"),]
+bdd_p_health_canada <- bddfinale[which(bddfinale$community == "media_public_health_canada"),]
+bdd_far_right_fr <- bddfinale[which(bddfinale$community== "conspiracy_and_far_right_france"),]
+bdd_far_right_int <- bddfinale[which(bddfinale$community == "conspiracy_and_far_right_international"),]
+bdd_random <- bddfinale[which(bddfinale$community == "random" ),]
+bdd_proscience_fr <- bddfinale[which(bddfinale$community == "pro_science_france"),]
+bdd_p_health_int <- bddfinale[which(bddfinale$community == "public_health_international"),]
+bdd_animal <- bddfinale[which(bddfinale$community== "animal_health"),]
 ```
 
 Puis on fusionne dans chaque série de bios entre elles, puis on les exporte en .txt pour traitement extérieur.
@@ -1145,4 +1144,8 @@ V(network_p1)$PRO_ANTI_OUT
 ## STERGM
 
 We use Separable Temporal Exponential family Random Graph Models (STERGM) to model the creation and destruction of links across the period. Two equations for each process are estimated.
+
+
+
+
 
